@@ -1177,10 +1177,10 @@ func DiskSetStoragePolicyPostCloneOperation(d *schema.ResourceData, c *govmomi.C
 	return l, spec, deviceKeyNamePairs, nil
 }
 
-//DiskRenameOperation renames the set of disks based on their keys. It is ran after disks have their storage policy set.
-//If a disk is updated to have a storage policy which has encryption enabled, the disk will change from being unencrypted to being encrypted.
-//On encrypting a disk, VSphere renames the file behind the disk and the name no longer matches the disk name in terraform state.
-//DiskRenameOperation changes the list of the disks, and is used to change the names back to the original disk names prior to encryption.
+// DiskRenameOperation renames the set of disks based on their keys. It is ran after disks have their storage policy set.
+// If a disk is updated to have a storage policy which has encryption enabled, the disk will change from being unencrypted to being encrypted.
+// On encrypting a disk, VSphere renames the file behind the disk and the name no longer matches the disk name in terraform state.
+// DiskRenameOperation changes the list of the disks, and is used to change the names back to the original disk names prior to encryption.
 func DiskRenameOperation(d *schema.ResourceData, c *govmomi.Client, l object.VirtualDeviceList, postOvf bool, deviceKeyNamePairs map[int]string, datacenterObj *object.Datacenter) (object.VirtualDeviceList, []types.BaseVirtualDeviceConfigSpec, error) {
 	log.Printf("[DEBUG] DiskRenameOperation: Looking for disk device changes post-clone")
 	devices := SelectDisks(l, d.Get("scsi_controller_count").(int), d.Get("sata_controller_count").(int), d.Get("ide_controller_count").(int))
