@@ -1533,6 +1533,7 @@ func resourceVSphereVirtualMachineCreateClone(d *schema.ResourceData, meta inter
 // fully complete and we move on to sending the customization spec.
 func resourceVSphereVirtualMachinePostDeployChanges(d *schema.ResourceData, meta interface{}, vm *object.VirtualMachine, postOvf bool, datacenterObj *object.Datacenter) error {
 	client := meta.(*Client).vimClient
+	timeout := meta.(*Client).timeout
 	poolID := d.Get("resource_pool_id").(string)
 	pool, err := resourcepool.FromID(client, poolID)
 	if err != nil {
@@ -1637,7 +1638,6 @@ func resourceVSphereVirtualMachinePostDeployChanges(d *schema.ResourceData, meta
 	if _, ok := d.GetOk("datastore_cluster_id"); ok {
 		err = resourceVSphereVirtualMachineUpdateReconfigureWithSDRS(d, meta, vm, cfgSpec)
 	} else {
-		timeout := meta.(*Client).timeout
 		err = virtualmachine.Reconfigure(vm, cfgSpec, timeout)
 	}
 	if err != nil {
@@ -1685,7 +1685,7 @@ func resourceVSphereVirtualMachinePostDeployChanges(d *schema.ResourceData, meta
 	if _, ok := d.GetOk("datastore_cluster_id"); ok {
 		err = resourceVSphereVirtualMachineUpdateReconfigureWithSDRS(d, meta, vm, specSetStoragePolicy)
 	} else {
-		err = virtualmachine.Reconfigure(vm, specSetStoragePolicy)
+		err = virtualmachine.Reconfigure(vm, specSetStoragePolicy, timeout)
 	}
 	if err != nil {
 		return resourceVSphereVirtualMachineRollbackCreate(
@@ -1740,7 +1740,7 @@ func resourceVSphereVirtualMachinePostDeployChanges(d *schema.ResourceData, meta
 		if _, ok := d.GetOk("datastore_cluster_id"); ok {
 			err = resourceVSphereVirtualMachineUpdateReconfigureWithSDRS(d, meta, vm, specForRename)
 		} else {
-			err = virtualmachine.Reconfigure(vm, specForRename)
+			err = virtualmachine.Reconfigure(vm, specForRename, timeout)
 		}
 		if err != nil {
 			return resourceVSphereVirtualMachineRollbackCreate(
@@ -1787,7 +1787,7 @@ func resourceVSphereVirtualMachinePostDeployChanges(d *schema.ResourceData, meta
 		if _, ok := d.GetOk("datastore_cluster_id"); ok {
 			err = resourceVSphereVirtualMachineUpdateReconfigureWithSDRS(d, meta, vm, specStoragePolicyPostRename)
 		} else {
-			err = virtualmachine.Reconfigure(vm, specStoragePolicyPostRename)
+			err = virtualmachine.Reconfigure(vm, specStoragePolicyPostRename, timeout)
 		}
 		if err != nil {
 			return resourceVSphereVirtualMachineRollbackCreate(
