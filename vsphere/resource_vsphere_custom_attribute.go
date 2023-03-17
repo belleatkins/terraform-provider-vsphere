@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package vsphere
 
 import (
@@ -37,7 +40,7 @@ func resourceVSphereCustomAttribute() *schema.Resource {
 }
 
 func resourceVSphereCustomAttributeCreate(d *schema.ResourceData, meta interface{}) error {
-	client := meta.(*VSphereClient).vimClient
+	client := meta.(*Client).vimClient
 	if err := customattribute.VerifySupport(client); err != nil {
 		return err
 	}
@@ -54,13 +57,13 @@ func resourceVSphereCustomAttributeCreate(d *schema.ResourceData, meta interface
 	}
 
 	d.SetId(fmt.Sprint(field.Key))
-	d.Set("name", field.Name)
-	d.Set("managed_object_type", field.ManagedObjectType)
+	_ = d.Set("name", field.Name)
+	_ = d.Set("managed_object_type", field.ManagedObjectType)
 	return nil
 }
 
 func resourceVSphereCustomAttributeRead(d *schema.ResourceData, meta interface{}) error {
-	client := meta.(*VSphereClient).vimClient
+	client := meta.(*Client).vimClient
 	if err := customattribute.VerifySupport(client); err != nil {
 		return err
 	}
@@ -83,13 +86,13 @@ func resourceVSphereCustomAttributeRead(d *schema.ResourceData, meta interface{}
 	if field == nil {
 		return fmt.Errorf("could not locate category with id '%d'", key)
 	}
-	d.Set("name", field.Name)
-	d.Set("managed_object_type", field.ManagedObjectType)
+	_ = d.Set("name", field.Name)
+	_ = d.Set("managed_object_type", field.ManagedObjectType)
 	return nil
 }
 
 func resourceVSphereCustomAttributeUpdate(d *schema.ResourceData, meta interface{}) error {
-	client := meta.(*VSphereClient).vimClient
+	client := meta.(*Client).vimClient
 	if err := customattribute.VerifySupport(client); err != nil {
 		return err
 	}
@@ -108,7 +111,7 @@ func resourceVSphereCustomAttributeUpdate(d *schema.ResourceData, meta interface
 }
 
 func resourceVSphereCustomAttributeDelete(d *schema.ResourceData, meta interface{}) error {
-	client := meta.(*VSphereClient).vimClient
+	client := meta.(*Client).vimClient
 	if err := customattribute.VerifySupport(client); err != nil {
 		return err
 	}
@@ -127,7 +130,7 @@ func resourceVSphereCustomAttributeDelete(d *schema.ResourceData, meta interface
 }
 
 func resourceVSphereCustomAttributeImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	client := meta.(*VSphereClient).vimClient
+	client := meta.(*Client).vimClient
 	if err := customattribute.VerifySupport(client); err != nil {
 		return nil, err
 	}

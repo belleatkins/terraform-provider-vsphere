@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package vsphere
 
 import (
@@ -212,7 +215,23 @@ resource "vsphere_tag_category" "testacc-category" {
   cardinality = "SINGLE"
 
   associable_types = [
-    "All",
+    "Folder",
+	"ClusterComputeResource",
+	"Datacenter",
+	"Datastore",
+	"StoragePod",
+	"DistributedVirtualPortgroup",
+	"DistributedVirtualSwitch",
+	"VmwareDistributedVirtualSwitch",
+	"HostSystem",
+	"com.vmware.content.Library",
+	"com.vmware.content.library.Item",
+	"HostNetwork",
+	"Network",
+	"OpaqueNetwork",
+	"ResourcePool",
+	"VirtualApp",
+	"VirtualMachine"
   ]
 }
 
@@ -229,7 +248,23 @@ resource "vsphere_tag_category" "testacc-category" {
   cardinality = "SINGLE"
 
   associable_types = [
-    "All",
+    "Folder",
+	"ClusterComputeResource",
+	"Datacenter",
+	"Datastore",
+	"StoragePod",
+	"DistributedVirtualPortgroup",
+	"DistributedVirtualSwitch",
+	"VmwareDistributedVirtualSwitch",
+	"HostSystem",
+	"com.vmware.content.Library",
+	"com.vmware.content.library.Item",
+	"HostNetwork",
+	"Network",
+	"OpaqueNetwork",
+	"ResourcePool",
+	"VirtualApp",
+	"VirtualMachine"
   ]
 }
 
@@ -246,7 +281,23 @@ resource "vsphere_tag_category" "testacc-category" {
   cardinality = "SINGLE"
 
   associable_types = [
-    "All",
+    "Folder",
+	"ClusterComputeResource",
+	"Datacenter",
+	"Datastore",
+	"StoragePod",
+	"DistributedVirtualPortgroup",
+	"DistributedVirtualSwitch",
+	"VmwareDistributedVirtualSwitch",
+	"HostSystem",
+	"com.vmware.content.Library",
+	"com.vmware.content.library.Item",
+	"HostNetwork",
+	"Network",
+	"OpaqueNetwork",
+	"ResourcePool",
+	"VirtualApp",
+	"VirtualMachine"
   ]
 }
 

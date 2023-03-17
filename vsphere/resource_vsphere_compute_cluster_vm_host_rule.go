@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package vsphere
 
 import (
@@ -211,7 +214,7 @@ func resourceVSphereComputeClusterVMHostRuleDelete(d *schema.ResourceData, meta 
 	return nil
 }
 
-func resourceVSphereComputeClusterVMHostRuleCustomizeDiff(_ context.Context, d *schema.ResourceDiff, meta interface{}) error {
+func resourceVSphereComputeClusterVMHostRuleCustomizeDiff(_ context.Context, d *schema.ResourceDiff, _ interface{}) error {
 	log.Printf("[DEBUG] %s: Beginning diff customization and validation", resourceVSphereComputeClusterVMHostRuleIDString(d))
 
 	if err := resourceVSphereComputeClusterVMHostRuleValidateHostRulesSpecified(d); err != nil {
@@ -326,9 +329,9 @@ func resourceVSphereComputeClusterVMHostRuleParseID(id string) (string, int32, e
 		return "", 0, fmt.Errorf("bad ID %q", id)
 	}
 
-	key, err := strconv.Atoi(parts[1])
+	key, err := strconv.ParseInt(parts[1], 10, 32)
 	if err != nil {
-		return "", 0, fmt.Errorf("bad key in ID %q: %s", parts[1], err)
+		return "", 0, fmt.Errorf("while converting key in ID %q to int32: %s", parts[1], err)
 	}
 
 	return parts[0], int32(key), nil
@@ -454,7 +457,7 @@ func resourceVSphereComputeClusterVMHostRuleFetchObjects(
 }
 
 func resourceVSphereComputeClusterVMHostRuleClient(meta interface{}) (*govmomi.Client, error) {
-	client := meta.(*VSphereClient).vimClient
+	client := meta.(*Client).vimClient
 	if err := viapi.ValidateVirtualCenter(client); err != nil {
 		return nil, err
 	}

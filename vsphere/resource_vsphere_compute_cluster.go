@@ -1,11 +1,18 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package vsphere
 
 import (
 	"context"
 	"fmt"
 	"log"
+	"sort"
+	"strings"
 
+	"github.com/hashicorp/terraform-provider-vsphere/vsphere/internal/helper/datastore"
 	"github.com/hashicorp/terraform-provider-vsphere/vsphere/internal/helper/provider"
+	"github.com/hashicorp/terraform-provider-vsphere/vsphere/internal/helper/vsanclient"
 
 	"github.com/vmware/govmomi/vim25/mo"
 
@@ -21,6 +28,7 @@ import (
 	"github.com/vmware/govmomi"
 	"github.com/vmware/govmomi/object"
 	"github.com/vmware/govmomi/vim25/types"
+	vsantypes "github.com/vmware/govmomi/vsan/types"
 )
 
 const resourceVSphereComputeClusterName = "vsphere_compute_cluster"
@@ -43,6 +51,11 @@ var drsBehaviorAllowedValues = []string{
 	string(types.DrsBehaviorManual),
 	string(types.DrsBehaviorPartiallyAutomated),
 	string(types.DrsBehaviorFullyAutomated),
+}
+
+var drsScaleDescendantsSharesAllowedValues = []string{
+	string(types.ResourceConfigSpecScaleSharesBehaviorDisabled),
+	string(types.ResourceConfigSpecScaleSharesBehaviorScaleCpuAndMemoryShares),
 }
 
 var dpmBehaviorAllowedValues = []string{
@@ -196,6 +209,13 @@ func resourceVSphereComputeCluster() *schema.Resource {
 				Optional:    true,
 				Description: "When true, enables DRS to use data from vRealize Operations Manager to make proactive DRS recommendations.",
 			},
+			"drs_scale_descendants_shares": {
+				Type:         schema.TypeString,
+				Optional:     true,
+				Default:      string(types.ResourceConfigSpecScaleSharesBehaviorDisabled),
+				Description:  "Enable scalable shares for all descendants of this cluster.",
+				ValidateFunc: validation.StringInSlice(drsScaleDescendantsSharesAllowedValues, false),
+			},
 			// DRS - DPM
 			"dpm_enabled": {
 				Type:        schema.TypeBool,
@@ -307,8 +327,8 @@ func resourceVSphereComputeCluster() *schema.Resource {
 			"ha_datastore_apd_response_delay": {
 				Type:        schema.TypeInt,
 				Optional:    true,
-				Default:     3,
-				Description: "When ha_vm_component_protection is enabled, controls the delay in minutes to wait after an APD timeout event to execute the response action defined in ha_datastore_apd_response.",
+				Default:     180,
+				Description: "When ha_vm_component_protection is enabled, controls the delay in seconds to wait after an APD timeout event to execute the response action defined in ha_datastore_apd_response.",
 			},
 			// VM monitoring
 			"ha_vm_monitoring": {
@@ -471,11 +491,68 @@ func resourceVSphereComputeCluster() *schema.Resource {
 				Description:   "Must be set if cluster enrollment is managed from host resource.",
 				ConflictsWith: []string{"host_system_ids"},
 			},
+			// VSAN
 			"vsan_enabled": {
 				Type:        schema.TypeBool,
 				Optional:    true,
-				Computed:    true,
-				Description: "Whether the VSAN service is enabled for the cluster.",
+				Default:     false,
+				Description: "Whether the vSAN service is enabled for the cluster.",
+			},
+			"vsan_dedup_enabled": {
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Default:     false,
+				Description: "Whether the vSAN deduplication service is enabled for the cluster.",
+			},
+			"vsan_compression_enabled": {
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Default:     false,
+				Description: "Whether the vSAN compression service is enabled for the cluster.",
+			},
+			"vsan_performance_enabled": {
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Default:     false,
+				Description: "Whether the vSAN performance service is enabled for the cluster.",
+			},
+			"vsan_verbose_mode_enabled": {
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Default:     false,
+				Description: "Whether the vSAN verbose mode is enabled for the cluster.",
+			},
+			"vsan_network_diagnostic_mode_enabled": {
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Default:     false,
+				Description: "Whether the vSAN network diagnostic mode is enabled for the cluster.",
+			},
+			"vsan_unmap_enabled": {
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Default:     false,
+				Description: "Whether the vSAN unmap service is enabled for the cluster.",
+			},
+			"vsan_remote_datastore_ids": {
+				Type:        schema.TypeSet,
+				Optional:    true,
+				MaxItems:    5,
+				Description: "The managed object IDs of the vSAN datastore to be mounted on the cluster.",
+				Elem:        &schema.Schema{Type: schema.TypeString},
+			},
+			"vsan_dit_encryption_enabled": {
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Default:     false,
+				Description: "Whether the vSAN data-in-transit encryption is enabled for the cluster.",
+			},
+			"vsan_dit_rekey_interval": {
+				Type:         schema.TypeInt,
+				Optional:     true,
+				Computed:     true,
+				Description:  "When vsan_dit_encryption_enabled is enabled, sets the rekey interval of data-in-transit encryption (in minutes).",
+				ValidateFunc: validation.IntBetween(30, 10080),
 			},
 			"vsan_disk_group": {
 				Type:        schema.TypeList,
@@ -609,10 +686,6 @@ func resourceVSphereComputeClusterUpdate(d *schema.ResourceData, meta interface{
 		return err
 	}
 
-	if err = updateVsanDisks(d, cluster, meta); err != nil {
-		return err
-	}
-
 	log.Printf("[DEBUG] %s: Update finished successfully", resourceVSphereComputeClusterIDString(d))
 	return resourceVSphereComputeClusterRead(d, meta)
 }
@@ -633,8 +706,7 @@ func resourceVSphereComputeClusterDelete(d *schema.ResourceData, meta interface{
 	spec := expandClusterConfigSpecEx(d, version)
 
 	if *spec.DasConfig.Enabled && *spec.DasConfig.AdmissionControlEnabled {
-		switch v := spec.DasConfig.AdmissionControlPolicy.(type) {
-		case *types.ClusterFailoverHostAdmissionControlPolicy:
+		if v, ok := spec.DasConfig.AdmissionControlPolicy.(*types.ClusterFailoverHostAdmissionControlPolicy); ok {
 			_ = v
 			log.Printf("[DEBUG] if Admission Control Policy set to Failover Host than turn HA OFF before removing hosts")
 			spec.DasConfig.Enabled = structure.BoolPtr(false)
@@ -645,6 +717,10 @@ func resourceVSphereComputeClusterDelete(d *schema.ResourceData, meta interface{
 	}
 
 	if err := resourceVSphereComputeClusterDeleteProcessForceRemoveHosts(d, meta, cluster); err != nil {
+		return err
+	}
+
+	if err := resourceVSphereComputeClusterDeleteProcessForceRemoveVsanRemoteDatastore(d, meta, cluster); err != nil {
 		return err
 	}
 
@@ -724,9 +800,7 @@ func resourceVSphereComputeClusterApplyCreate(d *schema.ResourceData, meta inter
 	if err != nil {
 		return nil, fmt.Errorf("error creating cluster: %s", err)
 	}
-	if err = updateVsanDisks(d, cluster, meta); err != nil {
-		return nil, err
-	}
+
 	// Set the ID now before proceeding any further. Any other operation past
 	// this point is recoverable.
 	d.SetId(cluster.Reference().Value)
@@ -850,6 +924,11 @@ func resourceVSphereComputeClusterApplyClusterConfiguration(
 
 	log.Printf("[DEBUG] %s: Applying cluster configuration", resourceVSphereComputeClusterIDString(d))
 
+	// handle VSAN first to avoid race condition
+	if err := resourceVSphereComputeClusterApplyVsanConfig(d, meta, cluster); err != nil {
+		return err
+	}
+
 	client, err := resourceVSphereComputeClusterClient(meta)
 	if err != nil {
 		return err
@@ -888,7 +967,7 @@ func resourceVSphereComputeClusterApplyTags(d *schema.ResourceData, meta interfa
 // resourceVSphereComputeClusterReadTags reads the tags for
 // vsphere_compute_cluster.
 func resourceVSphereComputeClusterReadTags(d *schema.ResourceData, meta interface{}, cluster *object.ClusterComputeResource) error {
-	if tagsClient, _ := meta.(*VSphereClient).TagsManager(); tagsClient != nil {
+	if tagsClient, _ := meta.(*Client).TagsManager(); tagsClient != nil {
 		log.Printf("[DEBUG] %s: Reading tags", resourceVSphereComputeClusterIDString(d))
 		if err := readTagsForResource(tagsClient, cluster, d); err != nil {
 			return err
@@ -906,7 +985,7 @@ func resourceVSphereComputeClusterApplyCustomAttributes(
 	meta interface{},
 	cluster *object.ClusterComputeResource,
 ) error {
-	client := meta.(*VSphereClient).vimClient
+	client := meta.(*Client).vimClient
 	// Verify a proper vCenter before proceeding if custom attributes are defined
 	attrsProcessor, err := customattribute.GetDiffProcessorIfAttributesDefined(client, d)
 	if err != nil {
@@ -929,7 +1008,7 @@ func resourceVSphereComputeClusterReadCustomAttributes(
 	meta interface{},
 	cluster *object.ClusterComputeResource,
 ) error {
-	client := meta.(*VSphereClient).vimClient
+	client := meta.(*Client).vimClient
 	// Read custom attributes
 	if customattribute.IsSupported(client) {
 		log.Printf("[DEBUG] %s: Reading custom attributes", resourceVSphereComputeClusterIDString(d))
@@ -937,7 +1016,7 @@ func resourceVSphereComputeClusterReadCustomAttributes(
 		if err != nil {
 			return err
 		}
-		customattribute.ReadFromResource(client, props.Entity(), d)
+		customattribute.ReadFromResource(props.Entity(), d)
 	} else {
 		log.Printf("[DEBUG] %s: Custom attributes unsupported on this connection, skipping", resourceVSphereComputeClusterIDString(d))
 	}
@@ -1093,7 +1172,7 @@ func resourceVSphereComputeClusterApplyFolderChange(
 
 	if d.HasChange("folder") {
 		f := d.Get("folder").(string)
-		client := meta.(*VSphereClient).vimClient
+		client := meta.(*Client).vimClient
 		if err = clustercomputeresource.MoveToFolder(client, cluster, f); err != nil {
 			return nil, fmt.Errorf("could not move cluster to folder %q: %s", f, err)
 		}
@@ -1175,14 +1254,44 @@ func resourceVSphereComputeClusterDeleteProcessForceRemoveHosts(
 	return nil
 }
 
+// resourceVSphereComputeClusterDeleteProcessForceRemoveVsanRemoteDatastore process
+// force-evacuation if the resource has been configured to do so.
+//
+// NOTE: As documented, this should only be used in testing. Improper use
+// of this option can lead to service disruptions and/or may fail to
+// actually succeed depending on the resources actually in use in the
+// cluster, and specific constraints that exist in the cluster.
+func resourceVSphereComputeClusterDeleteProcessForceRemoveVsanRemoteDatastore(
+	d *schema.ResourceData,
+	meta interface{},
+	cluster *object.ClusterComputeResource,
+) error {
+	if !d.Get("force_evacuate_on_destroy").(bool) {
+		return nil
+	}
+
+	dsIDs := structure.SliceInterfacesToStrings(d.Get("vsan_remote_datastore_ids").(*schema.Set).List())
+	if len(dsIDs) == 0 {
+		return nil
+	}
+
+	log.Printf("[DEBUG] %s: Force-evacuating vsan remote datastores in cluster before removal", resourceVSphereComputeClusterIDString(d))
+
+	conf := vsantypes.VimVsanReconfigSpec{
+		DatastoreConfig: &vsantypes.VsanAdvancedDatastoreConfig{},
+	}
+	if err := vsanclient.Reconfigure(meta.(*Client).vsanClient, cluster.Reference(), conf); err != nil {
+		return fmt.Errorf("cannot force-evacuate remote datastores on cluster: %s, err: %s", d.Get("name").(string), err)
+	}
+
+	return nil
+}
+
 // resourceVSphereComputeClusterApplyDelete process the removal of a
 // cluster.
 func resourceVSphereComputeClusterApplyDelete(d structure.ResourceIDStringer, cluster *object.ClusterComputeResource) error {
 	log.Printf("[DEBUG] %s: Proceeding with cluster deletion", resourceVSphereComputeClusterIDString(d))
-	if err := clustercomputeresource.Delete(cluster); err != nil {
-		return err
-	}
-	return nil
+	return clustercomputeresource.Delete(cluster)
 }
 
 // resourceVSphereComputeClusterFlattenData saves the configuration attributes
@@ -1222,11 +1331,65 @@ func resourceVSphereComputeClusterFlattenData(
 		for _, host := range props.Host {
 			hostList = append(hostList, host.Value)
 		}
-		d.Set("host_system_ids", hostList)
+		_ = d.Set("host_system_ids", hostList)
 	}
 
-	err = flattenVsanDisks(d, cluster, meta.(*VSphereClient).vimClient)
+	// VSAN
+	err = flattenVsanDisks(d, cluster)
 	if err != nil {
+		return err
+	}
+
+	vsanConfig, err := vsanclient.GetVsanConfig(meta.(*Client).vsanClient, cluster.Reference())
+	if err != nil {
+		return err
+	}
+
+	if vsanConfig == nil {
+		return fmt.Errorf("error getting vsan information for cluster %s, response object was unexpectedly nil", d.Get("name").(string))
+	}
+
+	d.Set("vsan_enabled", structure.BoolNilFalse(vsanConfig.Enabled))
+
+	if vsanConfig.DataEfficiencyConfig != nil {
+		d.Set("vsan_dedup_enabled", vsanConfig.DataEfficiencyConfig.DedupEnabled)
+		d.Set("vsan_compression_enabled", structure.BoolNilFalse(vsanConfig.DataEfficiencyConfig.CompressionEnabled))
+	} else {
+		d.Set("vsan_dedup_enabled", false)
+		d.Set("vsan_compression_enabled", false)
+	}
+
+	if vsanConfig.PerfsvcConfig != nil {
+		d.Set("vsan_performance_enabled", vsanConfig.PerfsvcConfig.Enabled)
+		d.Set("vsan_verbose_mode_enabled", structure.BoolNilFalse(vsanConfig.PerfsvcConfig.VerboseMode))
+		d.Set("vsan_network_diagnostic_mode_enabled", structure.BoolNilFalse(vsanConfig.PerfsvcConfig.DiagnosticMode))
+	} else {
+		d.Set("vsan_performance_enabled", false)
+		d.Set("vsan_verbose_mode_enabled", false)
+		d.Set("vsan_network_diagnostic_mode_enabled", false)
+	}
+
+	if vsanConfig.UnmapConfig != nil {
+		d.Set("vsan_unmap_enabled", vsanConfig.UnmapConfig.Enable)
+	} else {
+		d.Set("vsan_unmap_enabled", false)
+	}
+
+	if vsanConfig.DataInTransitEncryptionConfig != nil {
+		d.Set("vsan_dit_encryption_enabled", structure.BoolNilFalse(vsanConfig.DataInTransitEncryptionConfig.Enabled))
+		d.Set("vsan_dit_rekey_interval", int(vsanConfig.DataInTransitEncryptionConfig.RekeyInterval))
+	} else {
+		d.Set("vsan_dit_encryption_enabled", false)
+		d.Set("vsan_dit_rekey_interval", 0)
+	}
+
+	var dsIDs []string
+	if vsanConfig.DatastoreConfig != nil {
+		for _, ds := range vsanConfig.DatastoreConfig.(*vsantypes.VsanAdvancedDatastoreConfig).RemoteDatastores {
+			dsIDs = append(dsIDs, ds.Value)
+		}
+	}
+	if err := d.Set("vsan_remote_datastore_ids", schema.NewSet(schema.HashString, structure.SliceStringsToInterfaces(dsIDs))); err != nil {
 		return err
 	}
 
@@ -1239,7 +1402,7 @@ func expandClusterConfigSpecEx(d *schema.ResourceData, version viapi.VSphereVers
 	obj := &types.ClusterConfigSpecEx{
 		DasConfig: expandClusterDasConfigInfo(d, version),
 		DpmConfig: expandClusterDpmConfigInfo(d),
-		DrsConfig: expandClusterDrsConfigInfo(d),
+		DrsConfig: expandClusterDrsConfigInfo(d, version),
 	}
 
 	if version.Newer(viapi.VSphereVersion{Product: version.Product, Major: 6, Minor: 5}) {
@@ -1248,56 +1411,143 @@ func expandClusterConfigSpecEx(d *schema.ResourceData, version viapi.VSphereVers
 		obj.ProactiveDrsConfig = expandClusterProactiveDrsConfigInfo(d)
 	}
 
-	obj.VsanConfig = expandVsanConfig(d)
-
 	return obj
 }
 
-func expandVsanConfig(d *schema.ResourceData) *types.VsanClusterConfigInfo {
-	conf := &types.VsanClusterConfigInfo{}
-	enabled := d.Get("vsan_enabled").(bool)
+func expandVsanPerfConfig(d *schema.ResourceData) (*vsantypes.VsanPerfsvcConfig, error) {
+	vsanEnabled := d.Get("vsan_enabled").(bool)
+	perfEnabled := d.Get("vsan_performance_enabled").(bool)
+	verboseEnabled := d.Get("vsan_verbose_mode_enabled").(bool)
+	networkDiagnosticEnabled := d.Get("vsan_network_diagnostic_mode_enabled").(bool)
 
-	conf.Enabled = &enabled
-	conf.DefaultConfig = &types.VsanClusterConfigInfoHostDefaultInfo{}
-	return conf
+	if (!vsanEnabled || !perfEnabled) && (verboseEnabled || networkDiagnosticEnabled) {
+		return nil, fmt.Errorf("cannot apply verbose mode and network diagnostic mode when performance service or vsan disabled on cluster: %s", d.Get("name").(string))
+	}
+
+	return &vsantypes.VsanPerfsvcConfig{
+		Enabled:        perfEnabled,
+		VerboseMode:    &verboseEnabled,
+		DiagnosticMode: &networkDiagnosticEnabled,
+	}, nil
+}
+
+func expandVsanDatastoreConfig(d *schema.ResourceData, meta interface{}) (*vsantypes.VsanAdvancedDatastoreConfig, error) {
+	vimClient := meta.(*Client).vimClient
+	conf := &vsantypes.VsanAdvancedDatastoreConfig{}
+
+	dsIDs := structure.SliceInterfacesToStrings(d.Get("vsan_remote_datastore_ids").(*schema.Set).List())
+
+	if len(dsIDs) > 0 && d.Get("vsan_dit_encryption_enabled").(bool) {
+		return nil, fmt.Errorf("vsan data-in-transit encryption cannot be enabled with HCI mesh")
+	}
+
+	for _, dsID := range dsIDs {
+		ds, err := datastore.FromID(vimClient, dsID)
+		if err != nil {
+			return nil, fmt.Errorf("error locating datastore ID %q: %s", dsID, err)
+		}
+
+		conf.RemoteDatastores = append(conf.RemoteDatastores, ds.Reference())
+	}
+
+	return conf, nil
+}
+
+func resourceVSphereComputeClusterApplyVsanConfig(d *schema.ResourceData, meta interface{}, cluster *object.ClusterComputeResource) error {
+	conf := vsantypes.VimVsanReconfigSpec{
+		Modify: true,
+		VsanClusterConfig: &vsantypes.VsanClusterConfigInfo{
+			Enabled:       structure.GetBool(d, "vsan_enabled"),
+			DefaultConfig: &types.VsanClusterConfigInfoHostDefaultInfo{},
+		},
+		UnmapConfig: &vsantypes.VsanUnmapConfig{
+			Enable: d.Get("vsan_unmap_enabled").(bool),
+		},
+		DataInTransitEncryptionConfig: &vsantypes.VsanDataInTransitEncryptionConfig{
+			Enabled:       structure.GetBool(d, "vsan_dit_encryption_enabled"),
+			RekeyInterval: int32(d.Get("vsan_dit_rekey_interval").(int)),
+		},
+	}
+
+	dedupEnabled := d.Get("vsan_dedup_enabled").(bool)
+	compressionEnabled := d.Get("vsan_compression_enabled").(bool)
+	if dedupEnabled && !compressionEnabled {
+		return fmt.Errorf("vsan compression must be enabled if vsan dedup is enabled")
+	}
+
+	conf.DataEfficiencyConfig = &vsantypes.VsanDataEfficiencyConfig{
+		DedupEnabled:       dedupEnabled,
+		CompressionEnabled: &compressionEnabled,
+	}
+
+	perfConfig, err := expandVsanPerfConfig(d)
+	if err != nil {
+		return err
+	}
+	conf.PerfsvcConfig = perfConfig
+
+	if err := vsanclient.Reconfigure(meta.(*Client).vsanClient, cluster.Reference(), conf); err != nil {
+		return fmt.Errorf("cannot apply vsan service on cluster '%s': %s", d.Get("name").(string), err)
+	}
+
+	// handle disk groups
+	if err = updateVsanDisks(d, cluster, meta); err != nil {
+		return err
+	}
+
+	// handle remote datastore/HCI Mesh in a separate call
+	datastoreConfig, err := expandVsanDatastoreConfig(d, meta)
+	if err != nil {
+		return err
+	}
+	if err := vsanclient.Reconfigure(meta.(*Client).vsanClient, cluster.Reference(), vsantypes.VimVsanReconfigSpec{
+		Modify:          true,
+		DatastoreConfig: datastoreConfig,
+	}); err != nil {
+		return fmt.Errorf("cannot apply vsan remote datastores on cluster '%s': %s", d.Get("name").(string), err)
+	}
+
+	return nil
+}
+
+func vsanDiskMapKey(d interface{}) string {
+	disk := d.(map[string]interface{})
+	cache := disk["cache"].(string)
+	storage := structure.SliceInterfacesToStrings(disk["storage"].(*schema.Set).List())
+	sort.Strings(storage)
+
+	return strings.Join(append(storage, cache), " ")
 }
 
 func updateVsanDisks(d *schema.ResourceData, cluster *object.ClusterComputeResource, meta interface{}) error {
-	client := meta.(*VSphereClient).vimClient
-	od, nd := d.GetChange("vsan_disk_group")
-	delSet := structure.DiffSlice(od.([]interface{}), nd.([]interface{}))
-	addSet := structure.DiffSlice(nd.([]interface{}), od.([]interface{}))
-	delSetI := delSet
-	addSetI := addSet
+	client := meta.(*Client).vimClient
+	o, n := d.GetChange("vsan_disk_group")
+	old := o.([]interface{})
+	new := n.([]interface{})
 
-	for i, del := range delSetI {
-		r := del.(map[string]interface{})
-		for n, add := range addSetI {
-			a := add.(map[string]interface{})
-			if r["cache"].(string) != a["cache"].(string) {
-				continue
-			}
+	oldMap := make(map[string]bool)
+	newMap := make(map[string]bool)
 
-			ds := r["storage"].(*schema.Set)
-			as := a["storage"].(*schema.Set)
-			switch {
-			case ds.Len() > as.Len():
-				addSet = structure.DropSliceItem(addSet, n)
-				delSet = structure.DropSliceItem(delSet, i)
-				r["storage"] = ds.Difference(as)
-				if r["storage"].(*schema.Set).Len() >= 1 {
-					r["cache"] = ""
-				}
-				delSet = append(delSet, r)
-			case ds.Len() < as.Len():
-				addSet = structure.DropSliceItem(addSet, n)
-				delSet = structure.DropSliceItem(delSet, i)
-				a["storage"] = as.Difference(ds)
-				addSet = append(addSet, a)
-			default:
-				addSet = structure.DropSliceItem(addSet, n)
-				delSet = structure.DropSliceItem(delSet, i)
-			}
+	for _, d := range old {
+		oldMap[vsanDiskMapKey(d)] = true
+	}
+	for _, d := range new {
+		newMap[vsanDiskMapKey(d)] = true
+	}
+
+	// build list to add
+	var addSet []interface{}
+	for _, d := range new {
+		if !oldMap[vsanDiskMapKey(d)] {
+			addSet = append(addSet, d)
+		}
+	}
+
+	// build list to delete
+	var delSet []interface{}
+	for _, d := range old {
+		if !newMap[vsanDiskMapKey(d)] {
+			delSet = append(delSet, d)
 		}
 	}
 
@@ -1343,9 +1593,6 @@ func generateDiskMap(client *govmomi.Client, host *object.HostSystem, list []int
 	for _, scsiLun := range hssProps.StorageDeviceInfo.ScsiLun {
 		for _, diskGroup := range list {
 			if hostDisk, ok := scsiLun.(*types.HostScsiDisk); ok {
-				if err != nil {
-					return nil, err
-				}
 				for _, storageDisk := range diskGroup.(map[string]interface{})["storage"].(*schema.Set).List() {
 					if hostDisk.CanonicalName == storageDisk.(string) {
 						diskMap.NonSsd = append(diskMap.NonSsd, *hostDisk)
@@ -1361,8 +1608,11 @@ func generateDiskMap(client *govmomi.Client, host *object.HostSystem, list []int
 }
 
 func deleteVsanDisks(host *object.HostSystem, list []interface{}, client *govmomi.Client) error {
+	if len(list) == 0 {
+		return nil
+	}
 	log.Printf("deleteVsanDisks: Starting removal of vSAN disks on %s.", host.Name())
-	hvs, err := vsansystem.FromHost(client, host, defaultAPITimeout)
+	hvs, err := vsansystem.FromHost(host, defaultAPITimeout)
 	if err != nil {
 		return nil
 	}
@@ -1383,12 +1633,18 @@ func deleteVsanDisks(host *object.HostSystem, list []interface{}, client *govmom
 }
 
 func addVsanDisks(host *object.HostSystem, list []interface{}, client *govmomi.Client) error {
+	if len(list) == 0 {
+		return nil
+	}
 	log.Printf("addVsanDisks: Starting initialization of vSAN disks on %s.", host.Name())
-	hvs, err := vsansystem.FromHost(client, host, defaultAPITimeout)
+	hvs, err := vsansystem.FromHost(host, defaultAPITimeout)
 	if err != nil {
 		return nil
 	}
 	diskMap, err := generateDiskMap(client, host, list)
+	if err != nil {
+		return err
+	}
 	if diskMap.Ssd.CanonicalName != "" {
 		log.Printf("addVsanDisks: Scheduled disks are being initialized.")
 		if err = vsansystem.InitializeDisks(client, host, hvs, diskMap, defaultAPITimeout); err != nil {
@@ -1401,7 +1657,7 @@ func addVsanDisks(host *object.HostSystem, list []interface{}, client *govmomi.C
 	return nil
 }
 
-func flattenVsanDisks(d *schema.ResourceData, cluster *object.ClusterComputeResource, client *govmomi.Client) error {
+func flattenVsanDisks(d *schema.ResourceData, cluster *object.ClusterComputeResource) error {
 	diskMap := []interface{}{}
 
 	hosts, err := clustercomputeresource.Hosts(cluster)
@@ -1409,11 +1665,11 @@ func flattenVsanDisks(d *schema.ResourceData, cluster *object.ClusterComputeReso
 		return err
 	}
 	for _, host := range hosts {
-		hvs, err := vsansystem.FromHost(client, host, defaultAPITimeout)
+		hvs, err := vsansystem.FromHost(host, defaultAPITimeout)
 		if err != nil {
 			return err
 		}
-		hvsProps, err := vsansystem.Properties(client, hvs, defaultAPITimeout)
+		hvsProps, err := vsansystem.Properties(hvs, defaultAPITimeout)
 		if err != nil {
 			return err
 		}
@@ -1443,10 +1699,9 @@ func flattenClusterConfigSpecEx(d *schema.ResourceData, obj *types.ClusterConfig
 	if err := flattenClusterDpmConfigInfo(d, obj.DpmConfigInfo); err != nil {
 		return err
 	}
-	if err := flattenClusterDrsConfigInfo(d, obj.DrsConfig); err != nil {
+	if err := flattenClusterDrsConfigInfo(d, obj.DrsConfig, version); err != nil {
 		return err
 	}
-	d.Set("vsan_enabled", obj.VsanConfigInfo.Enabled)
 
 	if version.Newer(viapi.VSphereVersion{Product: version.Product, Major: 6, Minor: 5}) {
 		if err := flattenClusterInfraUpdateHaConfigInfo(d, obj.InfraUpdateHaConfig); err != nil {
@@ -1532,7 +1787,7 @@ func flattenClusterDasConfigInfo(d *schema.ResourceData, obj types.ClusterDasCon
 	// configured. Set ha_admission_control_policy to disabled before
 	// flattenBaseClusterDasAdmissionControlPolicy, so AdmissionControlEnabled
 	// can still be checked.
-	if *obj.AdmissionControlEnabled == false {
+	if !*obj.AdmissionControlEnabled {
 		return d.Set("ha_admission_control_policy", clusterAdmissionControlTypeDisabled)
 	}
 	return flattenBaseClusterDasAdmissionControlPolicy(d, obj.AdmissionControlPolicy, version)
@@ -1558,7 +1813,7 @@ func expandBaseClusterDasAdmissionControlPolicy(
 		return nil
 	}
 
-	if version.Newer(viapi.VSphereVersion{Product: version.Product, Major: 6, Minor: 5}) {
+	if obj != nil && version.Newer(viapi.VSphereVersion{Product: version.Product, Major: 6, Minor: 5}) {
 		obj.GetClusterDasAdmissionControlPolicy().ResourceReductionToToleratePercent = structure.Int32Ptr(int32(d.Get("ha_admission_control_performance_tolerance").(int)))
 	}
 
@@ -1888,7 +2143,7 @@ func flattenClusterDpmConfigInfo(d *schema.ResourceData, obj *types.ClusterDpmCo
 
 // expandClusterDrsConfigInfo reads certain ResourceData keys and returns a
 // ClusterDrsConfigInfo.
-func expandClusterDrsConfigInfo(d *schema.ResourceData) *types.ClusterDrsConfigInfo {
+func expandClusterDrsConfigInfo(d *schema.ResourceData, version viapi.VSphereVersion) *types.ClusterDrsConfigInfo {
 	obj := &types.ClusterDrsConfigInfo{
 		DefaultVmBehavior:         types.DrsBehavior(d.Get("drs_automation_level").(string)),
 		Enabled:                   structure.GetBool(d, "drs_enabled"),
@@ -1897,12 +2152,16 @@ func expandClusterDrsConfigInfo(d *schema.ResourceData) *types.ClusterDrsConfigI
 		Option:                    expandResourceVSphereComputeClusterDrsAdvancedOptions(d),
 	}
 
+	if version.Newer(viapi.VSphereVersion{Product: version.Product, Major: 7, Minor: 0}) {
+		obj.ScaleDescendantsShares = d.Get("drs_scale_descendants_shares").(string)
+	}
+
 	return obj
 }
 
 // flattenClusterDrsConfigInfo saves a ClusterDrsConfigInfo into the supplied
 // ResourceData.
-func flattenClusterDrsConfigInfo(d *schema.ResourceData, obj types.ClusterDrsConfigInfo) error {
+func flattenClusterDrsConfigInfo(d *schema.ResourceData, obj types.ClusterDrsConfigInfo, version viapi.VSphereVersion) error {
 	err := structure.SetBatch(d, map[string]interface{}{
 		"drs_automation_level":    obj.DefaultVmBehavior,
 		"drs_enabled":             obj.Enabled,
@@ -1911,6 +2170,12 @@ func flattenClusterDrsConfigInfo(d *schema.ResourceData, obj types.ClusterDrsCon
 	})
 	if err != nil {
 		return err
+	}
+
+	if version.Newer(viapi.VSphereVersion{Product: version.Product, Major: 7, Minor: 0}) {
+		d.Set("drs_scale_descendants_shares", obj.ScaleDescendantsShares)
+	} else {
+		d.Set("drs_scale_descendants_shares", string(types.ResourceConfigSpecScaleSharesBehaviorDisabled))
 	}
 
 	return flattenResourceVSphereComputeClusterDrsAdvancedOptions(d, obj.Option)
@@ -2017,7 +2282,7 @@ func resourceVSphereComputeClusterIDString(d structure.ResourceIDStringer) strin
 }
 
 func resourceVSphereComputeClusterClient(meta interface{}) (*govmomi.Client, error) {
-	client := meta.(*VSphereClient).vimClient
+	client := meta.(*Client).vimClient
 	if err := viapi.ValidateVirtualCenter(client); err != nil {
 		return nil, err
 	}

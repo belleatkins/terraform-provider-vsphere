@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package vsphere
 
 import (
@@ -57,12 +60,9 @@ func expandHostPortGroupSpec(d *schema.ResourceData) *types.HostPortGroupSpec {
 // flattenHostPortGroupSpec reads various fields from a HostPortGroupSpec into
 // the passed in ResourceData.
 func flattenHostPortGroupSpec(d *schema.ResourceData, obj *types.HostPortGroupSpec) error {
-	d.Set("vlan_id", obj.VlanId)
-	d.Set("virtual_switch_name", obj.VswitchName)
-	if err := flattenHostNetworkPolicy(d, &obj.Policy); err != nil {
-		return err
-	}
-	return nil
+	_ = d.Set("vlan_id", obj.VlanId)
+	_ = d.Set("virtual_switch_name", obj.VswitchName)
+	return flattenHostNetworkPolicy(d, &obj.Policy)
 }
 
 // calculateComputedPolicy is a utility function to compute a map of state

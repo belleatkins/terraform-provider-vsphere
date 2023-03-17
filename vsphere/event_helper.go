@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package vsphere
 
 import (
@@ -12,10 +15,8 @@ import (
 	"github.com/vmware/govmomi/vim25/types"
 )
 
-// A list of known event IDs that we use for querying events.
 const (
-	eventTypeVmPoweredOffEvent      = "VmPoweredOffEvent"
-	eventTypeCustomizationSucceeded = "CustomizationSucceeded"
+	eventTypeVMPoweredOffEvent = "VmPoweredOffEvent"
 )
 
 // virtualMachineCustomizationWaiter is an object that waits for customization

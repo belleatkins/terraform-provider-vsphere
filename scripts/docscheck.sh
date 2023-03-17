@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) HashiCorp, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
 
 docs=$(ls website/docs/**/*.markdown)
 error=false
@@ -10,20 +13,24 @@ for doc in $docs; do
 
   case "$category" in
     "guides")
-      # Guides have no requirements
+      # Guides have no requirements.
       continue
       ;;
 
     "d")
-      # Data sources have no requirements
-      continue
+      # Data sources require a subcategory.
+      grep "^subcategory: " "$doc" > /dev/null
+      if [[ "$?" == "1" ]]; then
+        echo "Data source documentation is missing a subcategory: $doc"
+        error=true
+      fi
       ;;
 
 		"r")
-      # Resources require a subcategory
+      # Resources require a subcategory.
       grep "^subcategory: " "$doc" > /dev/null
       if [[ "$?" == "1" ]]; then
-        echo "Doc is missing a subcategory: $doc"
+        echo "Resource documentation is missing a subcategory: $doc"
         error=true
       fi
       ;;
@@ -32,7 +39,7 @@ for doc in $docs; do
       # Docs
       error=true
       echo "Unknown category \"$category\". " \
-        "Docs can only exist in r/, d/, or guides/ folders."
+        "Documentation can only exist in r/, d/, or guides/ directories."
       ;;
   esac
 done

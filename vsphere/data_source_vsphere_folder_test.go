@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package vsphere
 
 import (
@@ -57,7 +60,3 @@ data "vsphere_folder" "folder" {
 }
 `, os.Getenv("TF_VAR_VSPHERE_DATACENTER"))
 }
-
-const testAccDataSourceVSphereFolderConfigDefault = `
-data "vsphere_datacenter" "dc" {}
-`

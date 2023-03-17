@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package vsphere
 
 import (
@@ -11,7 +14,7 @@ func TestMain(m *testing.M) {
 	resource.TestMain(m)
 }
 
-func sweepVSphereClient() (*VSphereClient, error) {
+func sweepVSphereClient() (*Client, error) {
 	config := Config{
 		InsecureFlag:    true,
 		Debug:           false,

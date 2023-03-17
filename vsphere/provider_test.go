@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package vsphere
 
 import (
@@ -9,8 +12,6 @@ import (
 
 var testAccProviders map[string]*schema.Provider
 var testAccProvider *schema.Provider
-var testAccNullProvider *schema.Provider
-var testAccRandomProvider *schema.Provider
 
 func init() {
 	testAccProvider = Provider()
@@ -23,7 +24,6 @@ func TestProvider(t *testing.T) {
 	if err := Provider().InternalValidate(); err != nil {
 		t.Fatalf("err: %s", err)
 	}
-
 }
 
 func testAccPreCheck(t *testing.T) {

@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package virtualdevice
 
 import (
@@ -13,7 +16,7 @@ func TestDiskCapacityInGiB(t *testing.T) {
 		expected int
 	}{
 		{
-			name: "capacityInBytes",
+			name: "capacityInBytes - integer GiB",
 			subject: &types.VirtualDisk{
 				CapacityInBytes: 4294967296,
 				CapacityInKB:    4194304,
@@ -21,11 +24,26 @@ func TestDiskCapacityInGiB(t *testing.T) {
 			expected: 4,
 		},
 		{
-			name: "capacityInKB",
+			name: "capacityInKB - integer GiB",
 			subject: &types.VirtualDisk{
 				CapacityInKB: 4194304,
 			},
 			expected: 4,
+		},
+		{
+			name: "capacityInBytes - non-integer GiB",
+			subject: &types.VirtualDisk{
+				CapacityInBytes: 4294968320,
+				CapacityInKB:    4194305,
+			},
+			expected: 5,
+		},
+		{
+			name: "capacityInKB - non-integer GiB",
+			subject: &types.VirtualDisk{
+				CapacityInKB: 4194305,
+			},
+			expected: 5,
 		},
 	}
 	for _, tc := range cases {

@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package vsphere
 
 import (
@@ -13,9 +16,9 @@ func dataSourceVSphereHost() *schema.Resource {
 
 		Schema: map[string]*schema.Schema{
 			"name": {
-				Type: schema.TypeString,
+				Type:        schema.TypeString,
 				Description: "The name of the host. This can be a name or path.	If not provided, the default host is used.",
-				Optional: true,
+				Optional:    true,
 			},
 			"datacenter_id": {
 				Type:        schema.TypeString,
@@ -32,7 +35,7 @@ func dataSourceVSphereHost() *schema.Resource {
 }
 
 func dataSourceVSphereHostRead(d *schema.ResourceData, meta interface{}) error {
-	client := meta.(*VSphereClient).vimClient
+	client := meta.(*Client).vimClient
 	name := d.Get("name").(string)
 	dcID := d.Get("datacenter_id").(string)
 	dc, err := datacenterFromID(client, dcID)

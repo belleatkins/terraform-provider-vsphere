@@ -1,22 +1,23 @@
 ---
+subcategory: "Inventory"
 layout: "vsphere"
 page_title: "VMware vSphere: vsphere_folder"
 sidebar_current: "docs-vsphere-data-source-inventory-folder"
 description: |-
-  Provides a VMware vSphere folder data source. This can be used to get the general attributes of a vSphere inventory folder.
+  Provides a VMware vSphere folder data source. This can be used to get the
+  general attributes of a vSphere inventory folder.
 ---
 
 # vsphere\_folder
 
 The `vsphere_folder` data source can be used to get the general attributes of a
-vSphere inventory folder. Paths are absolute and include must include the
-datacenter.  
+vSphere inventory folder. Paths are absolute and must include the datacenter.
 
 ## Example Usage
 
 ```hcl
 data "vsphere_folder" "folder" {
-  path = "/dc1/datastore/folder1"
+  path = "/dc-01/datastore-01/folder-01"
 }
 ```
 
@@ -36,4 +37,3 @@ The only attribute that this resource exports is the `id`, which is set to the
 [managed object ID][docs-about-morefs] of the folder.
 
 [docs-about-morefs]: /docs/providers/vsphere/index.html#use-of-managed-object-references-by-the-vsphere-provider
-

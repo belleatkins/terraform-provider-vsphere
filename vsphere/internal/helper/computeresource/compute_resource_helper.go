@@ -1,11 +1,15 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package computeresource
 
 import (
 	"context"
 	"fmt"
-	"github.com/hashicorp/terraform-provider-vsphere/vsphere/internal/helper/hostsystem"
 	"log"
 	"strings"
+
+	"github.com/hashicorp/terraform-provider-vsphere/vsphere/internal/helper/hostsystem"
 
 	"github.com/hashicorp/terraform-provider-vsphere/vsphere/internal/helper/envbrowse"
 	"github.com/hashicorp/terraform-provider-vsphere/vsphere/internal/helper/provider"
@@ -62,6 +66,9 @@ func HostSystemFromID(client *govmomi.Client, id string) (BaseComputeResource, e
 	ctx, cancel := context.WithTimeout(context.Background(), provider.DefaultAPITimeout)
 	defer cancel()
 	host, err := hostsystem.FromID(client, id)
+	if err != nil {
+		return nil, err
+	}
 	pool, err := host.ResourcePool(ctx)
 	if err != nil {
 		return nil, err
@@ -83,25 +90,6 @@ func HostSystemFromID(client *govmomi.Client, id string) (BaseComputeResource, e
 	}
 
 	return obj.(*object.ComputeResource), nil
-}
-
-// ClusterFromID returns a ClusterComputeResource, a subclass of
-// ComputeResource that is used for clusters.
-func ClusterFromID(client *govmomi.Client, id string) (*object.ClusterComputeResource, error) {
-	finder := find.NewFinder(client.Client, false)
-
-	ref := types.ManagedObjectReference{
-		Type:  "ClusterComputeResource",
-		Value: id,
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), provider.DefaultAPITimeout)
-	defer cancel()
-	obj, err := finder.ObjectReference(ctx, ref)
-	if err != nil {
-		return nil, err
-	}
-	return obj.(*object.ClusterComputeResource), nil
 }
 
 // BaseFromPath returns a BaseComputeResource for a given path.

@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package provider
 
 import (
@@ -9,6 +12,6 @@ import (
 // requiring contexts, and other various waiters.
 const DefaultAPITimeout = time.Minute * 5
 
-func ProviderError(id string, function string, err error) error {
+func Error(id string, function string, err error) error {
 	return fmt.Errorf("%s: RESOURCE (%s), ACTION (%s)", err, id, function)
 }

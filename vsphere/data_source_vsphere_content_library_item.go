@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package vsphere
 
 import (
@@ -33,13 +36,13 @@ func dataSourceVSphereContentLibraryItem() *schema.Resource {
 }
 
 func dataSourceVSphereContentLibraryItemRead(d *schema.ResourceData, meta interface{}) error {
-	rc := meta.(*VSphereClient).restClient
+	rc := meta.(*Client).restClient
 	lib, _ := contentlibrary.FromID(rc, d.Get("library_id").(string))
 	item, err := contentlibrary.ItemFromName(rc, lib, d.Get("name").(string))
 	if err != nil {
-		return provider.ProviderError(d.Get("name").(string), "dataSourceVSphereContentLibraryItemRead", err)
+		return provider.Error(d.Get("name").(string), "dataSourceVSphereContentLibraryItemRead", err)
 	}
-	d.Set("type", item.Type)
+	_ = d.Set("type", item.Type)
 	d.SetId(item.ID)
 	return nil
 }

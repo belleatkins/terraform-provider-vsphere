@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package nsx
 
 import (
@@ -36,7 +39,7 @@ func OpaqueNetworkFromNetworkID(client *govmomi.Client, id string) (*object.Opaq
 	defer func() {
 		dctx, dcancel := context.WithTimeout(context.Background(), provider.DefaultAPITimeout)
 		defer dcancel()
-		v.Destroy(dctx)
+		_ = v.Destroy(dctx)
 	}()
 
 	var networks []mo.OpaqueNetwork

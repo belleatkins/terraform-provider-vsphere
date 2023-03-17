@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package vmworkflow
 
 import (
@@ -54,6 +57,13 @@ func VirtualMachineOvfDeploySchema() map[string]*schema.Schema {
 			Optional:    true,
 			DefaultFunc: schema.EnvDefaultFunc("VSPHERE_ALLOW_UNVERIFIED_SSL", false),
 			Description: "Allow unverified ssl certificates while deploying ovf/ova from url.",
+		},
+		"enable_hidden_properties": {
+			Type:        schema.TypeBool,
+			Optional:    true,
+			Default:     false,
+			Description: "Allow properties with ovf:userConfigurable=false to be set.",
+			ForceNew:    true,
 		},
 	}
 }

@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package vsphere
 
 import (
@@ -21,7 +24,6 @@ resource "vsphere_license" "foo" {
 `
 
 func TestAccResourceVSphereLicense_basic(t *testing.T) {
-
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			RunSweepers()
@@ -39,11 +41,9 @@ func TestAccResourceVSphereLicense_basic(t *testing.T) {
 			},
 		},
 	})
-
 }
 
 func TestAccResourceVSphereLicense_invalid(t *testing.T) {
-
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			RunSweepers()
@@ -61,11 +61,9 @@ func TestAccResourceVSphereLicense_invalid(t *testing.T) {
 			},
 		},
 	})
-
 }
 
 func TestAccResourceVSphereLicense_withLabelsOnVCenter(t *testing.T) {
-
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			RunSweepers()
@@ -85,11 +83,9 @@ func TestAccResourceVSphereLicense_withLabelsOnVCenter(t *testing.T) {
 			},
 		},
 	})
-
 }
 
 func TestAccResourceVSphereLicense_withLabelsOnESXiServer(t *testing.T) {
-
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			RunSweepers()
@@ -107,7 +103,6 @@ func TestAccResourceVSphereLicense_withLabelsOnESXiServer(t *testing.T) {
 			},
 		},
 	})
-
 }
 
 func testAccVspherePreLicenseESXiServerIsNotSetCheck(t *testing.T) {
@@ -138,7 +133,7 @@ resource "vsphere_license" "foo" {
 }
 
 func testAccVSphereLicenseDestroy(s *terraform.State) error {
-	client := testAccProvider.Meta().(*VSphereClient).vimClient
+	client := testAccProvider.Meta().(*Client).vimClient
 	manager := license.NewManager(client.Client)
 	message := ""
 	for _, rs := range s.RootModule().Resources {
@@ -165,7 +160,7 @@ func testAccVSphereLicenseExists(name string) resource.TestCheckFunc {
 			return fmt.Errorf("%s key not found on the server", name)
 		}
 
-		client := testAccProvider.Meta().(*VSphereClient).vimClient
+		client := testAccProvider.Meta().(*Client).vimClient
 		manager := license.NewManager(client.Client)
 
 		if !isKeyPresent(rs.Primary.ID, manager) {
@@ -202,7 +197,7 @@ func testAccVSphereLicenseWithLabelExists(name string) resource.TestCheckFunc {
 			return fmt.Errorf("%s key not found on the server", name)
 		}
 
-		client := testAccProvider.Meta().(*VSphereClient).vimClient
+		client := testAccProvider.Meta().(*Client).vimClient
 		manager := license.NewManager(client.Client)
 
 		if !isKeyPresent(rs.Primary.ID, manager) {

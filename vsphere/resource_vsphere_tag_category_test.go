@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package vsphere
 
 import (
@@ -103,6 +106,23 @@ func TestAccResourceVSphereTagCategory_removeTypeShouldError(t *testing.T) {
 			{
 				Config:      testAccResourceVSphereTagCategoryConfigBasic,
 				ExpectError: regexp.MustCompile("removal of associable types is not supported"),
+			},
+		},
+	})
+}
+
+func TestAccResourceVSphereTagCategory_invalidTypeShouldError(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			RunSweepers()
+			testAccPreCheck(t)
+		},
+		Providers:    testAccProviders,
+		CheckDestroy: testAccResourceVSphereTagCategoryExists(false),
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccResourceVSphereTagCategoryConfigInvalid,
+				ExpectError: regexp.MustCompile("is not a valid associable_type"),
 			},
 		},
 	})
@@ -258,6 +278,18 @@ resource "vsphere_tag_category" "testacc-category" {
   associable_types = [
     "VirtualMachine",
     "Datastore",
+  ]
+}
+`
+
+const testAccResourceVSphereTagCategoryConfigInvalid = `
+resource "vsphere_tag_category" "testacc-category" {
+  name        = "testacc-category"
+  description = "Managed by Terraform"
+  cardinality = "SINGLE"
+
+  associable_types = [
+    "invalid",
   ]
 }
 `

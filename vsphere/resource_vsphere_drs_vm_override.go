@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package vsphere
 
 import (
@@ -374,7 +377,7 @@ func resourceVSphereDRSVMOverrideFetchObjects(
 }
 
 func resourceVSphereDRSVMOverrideClient(meta interface{}) (*govmomi.Client, error) {
-	client := meta.(*VSphereClient).vimClient
+	client := meta.(*Client).vimClient
 	if err := viapi.ValidateVirtualCenter(client); err != nil {
 		return nil, err
 	}

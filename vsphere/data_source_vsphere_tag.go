@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package vsphere
 
 import "github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -26,7 +29,7 @@ func dataSourceVSphereTag() *schema.Resource {
 }
 
 func dataSourceVSphereTagRead(d *schema.ResourceData, meta interface{}) error {
-	tm, err := meta.(*VSphereClient).TagsManager()
+	tm, err := meta.(*Client).TagsManager()
 	if err != nil {
 		return err
 	}

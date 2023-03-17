@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package vsphere
 
 import (
@@ -27,7 +30,7 @@ func dataSourceVSphereCustomAttribute() *schema.Resource {
 }
 
 func dataSourceVSphereCustomAttributeRead(d *schema.ResourceData, meta interface{}) error {
-	client := meta.(*VSphereClient).vimClient
+	client := meta.(*Client).vimClient
 	err := customattribute.VerifySupport(client)
 	if err != nil {
 		return err
@@ -43,6 +46,6 @@ func dataSourceVSphereCustomAttributeRead(d *schema.ResourceData, meta interface
 		return err
 	}
 	d.SetId(fmt.Sprint(field.Key))
-	d.Set("managed_object_type", field.ManagedObjectType)
+	_ = d.Set("managed_object_type", field.ManagedObjectType)
 	return nil
 }

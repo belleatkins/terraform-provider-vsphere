@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package vsphere
 
 import (
@@ -42,9 +45,6 @@ func dataSourceVSphereComputeClusterRead(d *schema.ResourceData, meta interface{
 	}
 
 	d.SetId(cluster.Reference().Value)
-	if err := d.Set("resource_pool_id", props.ResourcePool.Value); err != nil {
-		return err
-	}
-
+	_ = d.Set("resource_pool_id", props.ResourcePool.Value)
 	return nil
 }

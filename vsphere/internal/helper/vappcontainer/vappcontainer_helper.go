@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package vappcontainer
 
 import (
@@ -48,10 +51,7 @@ func FromID(client *govmomi.Client, id string) (*object.VirtualApp, error) {
 // deciding if a given resource pool is a vApp or a standard resource pool.
 func IsVApp(client *govmomi.Client, rp string) bool {
 	_, err := FromID(client, rp)
-	if err != nil {
-		return false
-	}
-	return true
+	return err == nil
 }
 
 // Properties returns the VirtualApp managed object from its higher-level
