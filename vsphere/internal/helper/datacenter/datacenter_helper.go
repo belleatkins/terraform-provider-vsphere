@@ -44,7 +44,6 @@ func FromInventoryPath(client *govmomi.Client, inventoryPath string) (*object.Da
 // VM inventory paths look like this: /SomeFolder/DatacenterName/.../VMName (datacenter is in a folder) or
 // /DatacenterName/.../VMName (datacenter is not in a folder).
 // We had a bug where the datacenter was in a folder and instead of the datacenter, the folder was returned.
-// See https://dev.azure.com/msazuredev/AzureForOperators/_workitems/edit/748713
 // The fixed function takes the inventory path and splits it by / as the delimiter. It then takes each part
 // of the inventory path in turn and tries to get the datacenter of the given name.
 // If it doesn't work, the current part is probably a folder and not a datacenter, so it tries again
