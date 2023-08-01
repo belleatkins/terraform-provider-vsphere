@@ -40,11 +40,10 @@ func FromInventoryPath(client *govmomi.Client, inventoryPath string) (*object.Da
 }
 
 // DatacenterFromVMInventoryPath returns the Datacenter object which is part of a given VM InventoryPath.
-// This is also deals with the case where the datacenter is in a folder.
+// This also deals with the case where the datacenter is in a folder.
 // VM inventory paths look like this: /SomeFolder/DatacenterName/.../VMName (datacenter is in a folder) or
 // /DatacenterName/.../VMName (datacenter is not in a folder).
-// We had a bug where the datacenter was in a folder and instead of the datacenter, the folder was returned.
-// The fixed function takes the inventory path and splits it by / as the delimiter. It then takes each part
+// The function takes the inventory path and splits it by / as the delimiter. It then takes each part
 // of the inventory path in turn and tries to get the datacenter of the given name.
 // If it doesn't work, the current part is probably a folder and not a datacenter, so it tries again
 // with the next part of the inventory path until it gets the datacenter.
