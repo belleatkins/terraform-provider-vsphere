@@ -262,7 +262,7 @@ BUG FIXES:
 
 FEATURES:
 * `data/dynamic`: Data source which can be used to match any tagged managed object. ([#1103](https://github.com/hashicorp/terraform-provider-vsphere/pull/1103))
-* `resource/vm_storage_policy_`: A resource for tag based storage placement.
+* `resource/vm_storage_policy_profile`: A resource for tag based storage placement.
   policies management. ([#1094](https://github.com/hashicorp/terraform-provider-vsphere/pull/1094))
 * `resource/virtual_machine`: Add support for PCI passthrough devices on virtual
   machines. ([#1099](https://github.com/hashicorp/terraform-provider-vsphere/pull/1099))
